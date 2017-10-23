@@ -12,6 +12,10 @@ from scipy.misc import imresize as imresize
 import cv2
 from PIL import Image
 
+model_names = sorted(name for name in models.__dict__
+    if name.islower() and not name.startswith("__")
+    and callable(models.__dict__[name]))
+
 
 def load_labels():
     # prepare all the labels
@@ -88,17 +92,29 @@ def returnTF():
 def load_model():
     # this model has a last conv feature map as 14x14
 
-    model_file = 'whole_wideresnet18_places365.pth.tar'
+    # model_file = 'whole_wideresnet18_places365.pth.tar'
+
+    '''
     if not os.access(model_file, os.W_OK):
         os.system('wget http://places2.csail.mit.edu/models_places365/' + model_file)
         os.system('wget https://raw.githubusercontent.com/csailvision/places365/master/wideresnet.py')
+    '''
 
-    model = torch.load(model_file, map_location=lambda storage, loc: storage)  # allow cpu
-    model.eval()
+    # model = torch.load(model_file, map_location=lambda storage, loc: storage)  # allow cpu
+    model = models.__dict__['resnet18'](num_classes=365)
     # hook the feature extractor
     features_names = ['layer4', 'avgpool']  # this is the last conv layer of the resnet
     for name in features_names:
         model._modules.get(name).register_forward_hook(hook_feature)
+
+    model = torch.nn.DataParallel(model).cuda()
+
+    checkpoint = torch.load('/home/ian/文件/workspace/pretrain_resnet18_best.pth.tar')
+    model.load_state_dict(checkpoint['state_dict'])
+
+    model.eval()
+
+    # hook the feature extractor
     return model
 
 
