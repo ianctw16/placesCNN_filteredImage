@@ -130,7 +130,7 @@ tf = returnTF()  # image transformer
 
 # get the softmax weight
 params = list(model.parameters())
-weight_softmax = params[-2].data.numpy()
+weight_softmax = params[-2].cpu().data.numpy()
 weight_softmax[weight_softmax < 0] = 0
 
 # load the test image
@@ -147,18 +147,17 @@ for file in files:
             print(img_path)
             img = Image.open(img_path)
             input_img = V(tf(img).unsqueeze(0), volatile=True)
+            input_img = input_img.cuda()
             logit = model.forward(input_img)
-            h_x = F.softmax(logit).data.squeeze()
+            h_x = F.softmax(logit).cuda().data.squeeze()
             probs, idx = h_x.sort(0, True)
-            io_image = np.mean(labels_IO[idx[:10].numpy()])  # vote for the indoor or outdoor
-            """
+            io_image = np.mean(labels_IO[idx[:10].cpu().numpy()])  # vote for the indoor or outdoor
             if io_image < 0.5:
                 print('--TYPE OF ENVIRONMENT: indoor')
                 output_txt.append('indoor')
             else:
                 print('--TYPE OF ENVIRONMENT: outdoor')
                 output_txt.append('outdoor')
-            """
             print('--SCENE CATEGORIES:')
             for i in range(0, 5):
                 print('{:.3f} -> {}'.format(probs[i], classes[idx[i]]))
@@ -187,18 +186,17 @@ for file in files:
         print(img_path)
         img = Image.open(img_path)
         input_img = V(tf(img).unsqueeze(0), volatile=True)
+        input_img = input_img.cuda()
         logit = model.forward(input_img)
-        h_x = F.softmax(logit).data.squeeze()
+        h_x = F.softmax(logit).cuda().data.squeeze()
         probs, idx = h_x.sort(0, True)
-        io_image = np.mean(labels_IO[idx[:10].numpy()])  # vote for the indoor or outdoor
-        """
+        io_image = np.mean(labels_IO[idx[:10].cpu().numpy()])  # vote for the indoor or outdoor
         if io_image < 0.5:
             print('--TYPE OF ENVIRONMENT: indoor')
             output_txt2.append('indoor')
         else:
             print('--TYPE OF ENVIRONMENT: outdoor')
             output_txt2.append('outdoor')
-        """
         print('--SCENE CATEGORIES:')
         for i in range(0, 5):
             print('{:.3f} -> {}'.format(probs[i], classes[idx[i]]))
