@@ -11,6 +11,7 @@ import numpy as np
 from scipy.misc import imresize as imresize
 import cv2
 from PIL import Image
+from skimage import color
 
 model_names = sorted(name for name in models.__dict__
     if name.islower() and not name.startswith("__")
@@ -84,7 +85,7 @@ def returnTF():
     tf = trn.Compose([
         trn.Scale((224, 224)),
         trn.ToTensor(),
-        trn.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        trn.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
     return tf
 
@@ -93,13 +94,11 @@ def load_model():
     # this model has a last conv feature map as 14x14
 
     # model_file = 'whole_wideresnet18_places365.pth.tar'
-
     '''
     if not os.access(model_file, os.W_OK):
         os.system('wget http://places2.csail.mit.edu/models_places365/' + model_file)
         os.system('wget https://raw.githubusercontent.com/csailvision/places365/master/wideresnet.py')
     '''
-
     # model = torch.load(model_file, map_location=lambda storage, loc: storage)  # allow cpu
     model = models.__dict__['resnet18'](num_classes=365)
     # hook the feature extractor
@@ -111,7 +110,7 @@ def load_model():
 
     checkpoint = torch.load('/home/ian/文件/workspace/pretrain_resnet18_best.pth.tar')
     model.load_state_dict(checkpoint['state_dict'])
-
+    # print(model)
     model.eval()
 
     # hook the feature extractor
@@ -136,57 +135,60 @@ weight_softmax[weight_softmax < 0] = 0
 # load the test image
 # img_url = 'http://places2.csail.mit.edu/imgs/12.jpg'
 # path = '/home/ian/文件/workspace/download_file/rise_instaLooter'
-path = '/home/ian/下載/FACD_image/1977'
+
+path = '/home/ian/下載/1977_gray'
 files = os.listdir(path)
+f = open('/home/ian/下載/1977_gray.txt', 'w')
 for file in files:
-    try:
-            output_txt = []
-            img_path = os.path.join(path, file)
-            # f.write(file)
-            # f.write(': ')
-            print(img_path)
-            img = Image.open(img_path)
-            input_img = V(tf(img).unsqueeze(0), volatile=True)
-            input_img = input_img.cuda()
-            logit = model.forward(input_img)
-            h_x = F.softmax(logit).cuda().data.squeeze()
-            probs, idx = h_x.sort(0, True)
-            io_image = np.mean(labels_IO[idx[:10].cpu().numpy()])  # vote for the indoor or outdoor
-            if io_image < 0.5:
-                print('--TYPE OF ENVIRONMENT: indoor')
-                output_txt.append('indoor')
-            else:
-                print('--TYPE OF ENVIRONMENT: outdoor')
-                output_txt.append('outdoor')
-            print('--SCENE CATEGORIES:')
-            for i in range(0, 5):
-                print('{:.3f} -> {}'.format(probs[i], classes[idx[i]]))
-                if(i == 0):
-                    tmp = '{:.3f}'.format(probs[i])
-                    tmp = float(tmp)
-                    output_txt.append(classes[idx[i]])
-            # f.write(str(output_txt))
-            # f.write('\n')
+        output_txt = []
+        img_path = os.path.join(path, file)
+        f.write(file)
+        f.write(': ')
+        print(img_path)
+        img = Image.open(img_path).convert('RGB')
+        # img = color.gray2rgb(img)
+        # img = cv2.imread(img_path)
+        print(type(img))
+        input_img = V(tf(img).unsqueeze(0), volatile=True)
+        logit = model.forward(input_img)
+        h_x = F.softmax(logit).cuda().data.squeeze()
+        probs, idx = h_x.sort(0, True)
+        io_image = np.mean(labels_IO[idx[:10].cpu().numpy()])  # vote for the indoor or outdoor
+        if io_image < 0.5:
+            print('--TYPE OF ENVIRONMENT: indoor')
+            output_txt.append('indoor')
+        else:
+            print('--TYPE OF ENVIRONMENT: outdoor')
+            output_txt.append('outdoor')
+        print('--SCENE CATEGORIES:')
+        for i in range(0, 5):
+            print('{:.3f} -> {}'.format(probs[i], classes[idx[i]]))
+            tmp = '{:.3f}'.format(probs[i])
+            tmp = float(tmp)
+            output_txt.append(classes[idx[i]])
 
-            # don't really know these two line doing.
-            responses_attribute = W_attribute.dot(features_blobs[1])
-            idx_a = np.argsort(responses_attribute)
-            # print('--SCENE ATTRIBUTES:')
+        f.write(str(output_txt))
+        f.write('\n')
 
-    except Exception as e:
-        print(e)
+        # don't really know these two line doing.
+        responses_attribute = W_attribute.dot(features_blobs[1])
+        idx_a = np.argsort(responses_attribute)
+        # print('--SCENE ATTRIBUTES:')
+f.close()
+
+'''
 path2 = '/home/ian/下載/FACD_image/Origin'
 files = os.listdir(path2)
+f = open('/home/ian/下載/origin.txt', 'w')
 for file in files:
-    try:
         output_txt2 = []
-        img_path = os.path.join(path, file)
-        # f.write(file)
-        # f.write(': ')
+        img_path = os.path.join(path2, file)
+        f.write(file)
+        f.write(': ')
         print(img_path)
-        img = Image.open(img_path)
+        img = Image.open(img_path).convert('RGB')
+        # img = color.gray2rgb(img)
         input_img = V(tf(img).unsqueeze(0), volatile=True)
-        input_img = input_img.cuda()
         logit = model.forward(input_img)
         h_x = F.softmax(logit).cuda().data.squeeze()
         probs, idx = h_x.sort(0, True)
@@ -200,15 +202,14 @@ for file in files:
         print('--SCENE CATEGORIES:')
         for i in range(0, 5):
             print('{:.3f} -> {}'.format(probs[i], classes[idx[i]]))
-            if(i == 0):
-                tmp = '{:.3f}'.format(probs[i])
-                tmp = float(tmp)
-                output_txt2.append(classes[idx[i]])
-    except Exception as e:
-        print(e)
-
-print(output_txt)
-print(output_txt2)
+            tmp = '{:.3f}'.format(probs[i])
+            tmp = float(tmp)
+            output_txt2.append(classes[idx[i]])
+        f.write(str(output_txt2))
+        f.write('\n')
+'''
+# print(output_txt)
+# print(output_txt2)
 
 # os.system('wget %s -q -O test.jpg' % img_url)
 # img = Image.open('test.jpg')
@@ -244,7 +245,7 @@ print('--SCENE ATTRIBUTES:')
 # print 'Class activation map is saved as cam.jpg'
 CAMs = returnCAM(features_blobs[0], weight_softmax, [idx[0]])
 """
-# f.close()
+f.close()
 """
 # render the CAM and output
 img = cv2.imread('test.jpg')
